@@ -1,0 +1,3 @@
+interface:
+  display_name: "Local Ai Progress"
+  short_description: "Build the local Ollama progress assistant"
