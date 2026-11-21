@@ -92,6 +92,18 @@ progress: 0
     expect(intent.episode, 5);
   });
 
+  test('parses common progress messages without a model call', () {
+    final english = FastProgressParser.parse(
+      'I watched 4 episodes of Example Series.',
+    );
+    final titleFirst = FastProgressParser.parse('Example Series 5 episodes');
+
+    expect(english?.title, 'Example Series');
+    expect(english?.episode, 4);
+    expect(titleFirst?.title, 'Example Series');
+    expect(titleFirst?.episode, 5);
+  });
+
   test('matches a chat title to a local note', () {
     final note = MediaNote(
       file: File('example-series.md'),
@@ -100,6 +112,47 @@ progress: 0
     );
 
     expect(ProgressMatcher.find([note], 'Example Series'), [note]);
+  });
+
+  test('prefers an exact title over a season title', () {
+    final first = MediaNote(
+      file: File('series-alpha.md'),
+      kind: 'Anime',
+      fields: {'title': 'Series Alpha'},
+    );
+    final second = MediaNote(
+      file: File('series-alpha-season-2.md'),
+      kind: 'Anime',
+      fields: {'title': 'Series Alpha Season 2'},
+    );
+
+    expect(ProgressMatcher.find([first, second], 'Series Alpha'), [first]);
+  });
+
+  test('lists only explicitly active notes', () {
+    final active = MediaNote(
+      file: File('active.md'),
+      kind: 'Anime',
+      fields: {
+        'title': 'Example Series',
+        'status': '[[🟢 On]]',
+        'progress': '3',
+        'episodes': '12',
+      },
+    );
+    final untracked = MediaNote(
+      file: File('untracked.md'),
+      kind: 'Game',
+      fields: {'title': 'Untracked Example'},
+    );
+
+    final reply = ChatCommands.reply('What am I watching?', [
+      active,
+      untracked,
+    ]);
+
+    expect(reply, contains('Example Series — 3/12'));
+    expect(reply, isNot(contains('Untracked Example')));
   });
 
   test('resolves a season disambiguation reply', () {

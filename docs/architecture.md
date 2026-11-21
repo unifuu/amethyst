@@ -7,7 +7,7 @@ Amethyst is a local-first Flutter desktop application. The current implementatio
 - `NoteRepository` discovers Markdown files, reads frontmatter, applies field-level writes, and synchronizes numbered checkboxes in an `## Episodes` section after a progress update.
 - `MediaNote` is the in-memory representation used by UI components.
 - `NoteCard` renders a media note; `EditNoteDialog` collects status and anime progress updates.
-- `LocalProgressChatPage` sends chat text to the local Ollama service, preserves pending ambiguity choices, renders selectable conversation text, and writes only the matching note's `progress` field.
+- `LocalProgressChatPage` handles English built-in commands first, then uses `FastProgressParser` for recognized title-and-episode messages, and finally falls back to the local Ollama service. It preserves pending ambiguity choices, renders selectable conversation text, and writes only the matching note's `progress` field.
 
 The selected notes directory is local-only configuration. `config.json` is Git-ignored and may contain a private local path; it must never be committed. The repository must not contain exported note data or any personally identifying vault details.
 

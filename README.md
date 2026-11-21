@@ -26,7 +26,9 @@ Use the folder button to select or change the parent directory containing your d
 
 ## Local Qwen progress assistant
 
-Open the sparkle button in the app bar to update anime progress from chat. Amethyst calls the Ollama API at `http://127.0.0.1:11434` and prefers the installed general-purpose `qwen3` model over a Coder model. Start Ollama first, then write a message such as `I watched episode 5 of Example Series.` The model extracts only the title and episode; Amethyst finds the local note and updates only its `progress` field. If multiple titles match, reply with the exact title, `first`, `second`, or `not season 2`; Amethyst retains the original episode number until the choice is resolved. Conversation text is selectable and copyable.
+Open the sparkle button in the app bar to update anime progress from English chat. For common messages such as `I watched episode 5 of Example Series.` or `Example Series 5 episodes`, Amethyst parses the title and episode instantly on-device without calling a model. It falls back to the Ollama API at `http://127.0.0.1:11434` only for less structured messages, preferring the installed general-purpose `qwen3` model over a Coder model. Amethyst finds the local note and updates only its `progress` field. If multiple titles match, reply with the exact title, `first`, `second`, or `not season 2`; Amethyst retains the original episode number until the choice is resolved. Conversation text is selectable and copyable.
+
+Built-in commands do not call the model: use `help`, `list in progress`, or `what am I watching?` to review notes explicitly marked `On`.
 
 This feature is fully local: no OpenAI API, API key, account, or cloud note upload is used. The chosen model is saved as `ollamaModel` in Git-ignored `config.json`.
 

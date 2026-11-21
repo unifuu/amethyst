@@ -42,6 +42,8 @@ class MediaNote {
     return 'On';
   }
 
+  bool get isOn => status.isNotEmpty && statusOption == 'On';
+
   int get statusRank {
     if (status.isEmpty) {
       return 3;
@@ -573,6 +575,34 @@ class ProgressIntent {
   }
 }
 
+class FastProgressParser {
+  static ProgressIntent? parse(String message) {
+    final english = RegExp(
+      r'^\s*(?:i\s+)?(?:watched|watch|saw|seen)\s+(?:episode\s*)?(\d+)\s+(?:episodes?\s+)?(?:of|for)\s+(.+?)\s*[.!]*\s*$',
+      caseSensitive: false,
+    ).firstMatch(message);
+    if (english != null) {
+      return _intent(english.group(2), english.group(1));
+    }
+    final titleFirst = RegExp(
+      r'^\s*(.+?)\s+(\d+)\s+episodes?\s*[.!]*\s*$',
+      caseSensitive: false,
+    ).firstMatch(message);
+    if (titleFirst != null) {
+      return _intent(titleFirst.group(1), titleFirst.group(2));
+    }
+    return null;
+  }
+
+  static ProgressIntent? _intent(String? title, String? episode) {
+    final number = int.tryParse(episode ?? '');
+    if (title == null || title.trim().isEmpty || number == null || number < 1) {
+      return null;
+    }
+    return ProgressIntent(title: title.trim(), episode: number);
+  }
+}
+
 class LocalOllamaClient {
   LocalOllamaClient({HttpClient? httpClient})
     : _httpClient = httpClient ?? HttpClient();
@@ -622,7 +652,7 @@ class LocalOllamaClient {
         'messages': [
           {
             'role': 'system',
-            'content': 'Extract a media title and watched episode number from the user message. Return JSON only. Support any language. Do not infer a missing title or episode.',
+            'content': 'Extract a media title and watched episode number from an English user message. Return JSON only. Do not infer a missing title or episode.',
           },
           {'role': 'user', 'content': message},
         ],
@@ -652,11 +682,13 @@ class ProgressMatcher {
   static List<MediaNote> find(List<MediaNote> notes, String title) {
     final query = _normalize(title);
     if (query.isEmpty) return [];
+    final exact = notes
+        .where((note) => _normalize(note.title) == query)
+        .toList();
+    if (exact.isNotEmpty) return exact;
     return notes.where((note) {
       final candidate = _normalize(note.title);
-      return candidate == query ||
-          candidate.contains(query) ||
-          query.contains(candidate);
+      return candidate.contains(query) || query.contains(candidate);
     }).toList();
   }
 
@@ -690,6 +722,33 @@ class ProgressMatcher {
       return candidates.length < 2 ? null : candidates[1];
     }
     return null;
+  }
+}
+
+class ChatCommands {
+  static String? reply(String message, List<MediaNote> notes) {
+    final normalized = message.toLowerCase().trim();
+    if (normalized == 'help' || normalized == 'commands') {
+      return 'Commands:\n• “List in progress” or “What am I watching?” lists notes marked On.\n• “I watched 5 episodes of Example Series” updates anime progress.';
+    }
+    final listsActive =
+        normalized.contains('what am i watching') ||
+        (RegExp(r'\b(list|show)\b').hasMatch(normalized) &&
+            RegExp(r'\b(in progress|progressing|active|on)\b')
+                .hasMatch(normalized));
+    if (!listsActive) return null;
+    final active = notes.where((note) => note.isOn).toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    if (active.isEmpty) return 'Nothing is currently marked On.';
+    final entries = active
+        .map((note) {
+          final progress = note.progress != null && note.episodes != null
+              ? ' — ${note.progress}/${note.episodes}'
+              : '';
+          return '• ${note.title}$progress';
+        })
+        .join('\n');
+    return 'Currently in progress (${active.length}):\n$entries';
   }
 }
 
@@ -761,7 +820,9 @@ class _LocalProgressChatPageState extends State<LocalProgressChatPage> {
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _model == null || _sending) return;
+    if (text.isEmpty || _sending) return;
+    final command = ChatCommands.reply(text, widget.notes);
+    if (_model == null && command == null) return;
     setState(() {
       _messages.add(_ChatMessage(text, isUser: true));
       _sending = true;
@@ -799,7 +860,11 @@ class _LocalProgressChatPageState extends State<LocalProgressChatPage> {
       }
       return 'Please choose one of these titles: ${_pendingMatches.map((note) => note.title).join(', ')}.';
     }
-    final intent = await _client.parseProgress(model: _model!, message: text);
+    final command = ChatCommands.reply(text, widget.notes);
+    if (command != null) return command;
+    final intent =
+        FastProgressParser.parse(text) ??
+        await _client.parseProgress(model: _model!, message: text);
     final matches = ProgressMatcher.find(widget.notes, intent.title);
     if (matches.isEmpty) {
       return 'I could not find “${intent.title}”. Please use the title from your library.';
